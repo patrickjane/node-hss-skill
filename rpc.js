@@ -69,25 +69,26 @@ function RpcClient(port, baseSkill) {
       try {
          obj = JSON.parse(message.replace('\\n', '\n'));
       } catch (e) {
-         log.erro('Failed to parse RPC request (' + e + ')');
+         log.error('Failed to parse RPC request (' + e + ')');
          return;
       }
 
       if (!obj.command || !obj.hasOwnProperty("seq")) {
-        log.erro('Malformed RPC request from server received');
+         log.error('Malformed RPC request from server received');
          return;
       }
 
       if (!pending[obj.seq + '']) {
-        log.erro('No pending RPC request with seq "' + obj.seq + '", ignoring')
+         log.error('No pending RPC request with seq "' + obj.seq + '", ignoring')
          return;
       }
 
-      let cb = pending[obj.seq + ''];
+      let pend = pending[obj.seq + ''];
 
       delete pending[obj.seq + ''];
 
-      cb(obj.command, obj.payload);
+      if (pend.cb)
+         pend.cb(obj.command, obj.payload);
    }
 
    // -------------------------------------------------------------------------------- //
@@ -104,10 +105,9 @@ function RpcClient(port, baseSkill) {
 
       client.write(data, (err) => {
          if (err)
-            log.erro('Error sending RPC response (' + err + ')');
+            log.error('Error sending RPC response (' + err + ')');
 
-         if (cb)
-            pending[res.seq + ''] = cb;
+         pending[res.seq + ''] = { cb };
       });
    }
 
@@ -144,13 +144,13 @@ function RpcServer(port, baseSkill) {
       });
 
       server.on('error', (err) => {
-        log.erro('RPC server error: "' + err + '"');
+         log.error('RPC server error: "' + err + '"');
       });
 
-       server.listen(port, () => {
-        log.debug('RPC server started on port ' + port);
+      server.listen(port, () => {
+         log.debug('RPC server started on port ' + port);
          cb()
-       });
+      });
    }
 
    // -------------------------------------------------------------------------------- //
@@ -163,18 +163,18 @@ function RpcServer(port, baseSkill) {
       try {
          obj = JSON.parse(message.replace('\\n', '\n'));
       } catch (e) {
-        log.erro('Failed to parse RPC request (' + e + ')');
+         log.error('Failed to parse RPC request (' + e + ')');
          return;
       }
 
       if (!obj.command || !obj.hasOwnProperty("seq")) {
-        log.erro('Malformed RPC request from server received');
+         log.error('Malformed RPC request from server received');
          return;
       }
 
       baseSkill.handleRequest(obj.command, obj.payload, (err, res, command, cb) => {
          if (err) {
-            log.erro('Handling RPC request failed ("' + err + '")');
+            log.error('Handling RPC request failed ("' + err + '")');
             return;
          }
 
@@ -203,7 +203,7 @@ function RpcServer(port, baseSkill) {
 
       socket.write(data, (err) => {
          if (err)
-            log.erro('Error sending RPC response (' + err + ')');
+            log.error('Error sending RPC response (' + err + ')');
 
          if (cb)
             cb(err);

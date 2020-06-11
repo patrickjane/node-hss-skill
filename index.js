@@ -11,24 +11,33 @@
 const RpcClient = require('./rpc.js').RpcClient;
 const RpcServer = require('./rpc.js').RpcServer;
 const Logger = require('./log.js');
+const path = require("path");
+const fs = require("fs");
+const ini = require("ini");
 
 // -------------------------------------------------------------------------------- //
 // class BaseSkill
 // -------------------------------------------------------------------------------- //
 
-function BaseSkill() {
+function BaseSkill(rootDirectory) {
    const args = require('minimist')(process.argv.slice(2));
 
    for (let required of ['skill-name', 'parent-port', 'port'])
       if (!args[required])
          throw new Error('Missing mandatory argument "' + required + '"');
 
-   let api = { run, handleRequest, say, ask, getLogger };
+   if (!rootDirectory)
+      throw new Error('No root-directory given!')
+
+   let api = { run, handleRequest, say, ask, getLogger, getConfig };
 
    let skill;
-   let log = Logger.getLogger(args["skill-name"], args["debug"] ? true : false)
-   let rpcClient = RpcClient(args['parent-port'], api);
-   let rpcServer = RpcServer(args['port'], api);
+   let config;
+   let log;
+   let rpcClient;
+   let rpcServer;
+
+   init();
 
    // -------------------------------------------------------------------------------- //
    // run
@@ -36,9 +45,6 @@ function BaseSkill() {
 
    function run(_skill) {
       skill = _skill;
-
-      if (!skill.getIntentList)
-         throw new Error('Skills must implement function "getIntentList"');
 
       if (!skill.handle)
          throw new Error('Skills must implement function "handle"');
@@ -93,13 +99,10 @@ function BaseSkill() {
    // -------------------------------------------------------------------------------- //
 
    function handleRequest(command, payload, cb) {
-      if (command == 'get_intentlist')
-         return skill.getIntentList(cb);
-
       if (command == 'handle')
-         return handleIntent(payload, cb)
+         return handleIntent(payload, cb);
 
-         log.error('Unknown/invalid command "' + command + '" received, must skip');
+      log.error('Unknown/invalid command "' + command + '" received, must skip');
    }
 
    // -------------------------------------------------------------------------------- //
@@ -136,7 +139,11 @@ function BaseSkill() {
          log.error('Failed to parse slots (' + e + ')');
       }
 
-      return skill.handle(params, _answer, _followup);
+      try {
+         skill.handle(params, _answer, _followup);
+      } catch (e) {
+         log.error('Skill failed to handle intent (' + e + ')');
+      }
 
       function _answer(err, response, lang) {
          let payload = {
@@ -166,8 +173,8 @@ function BaseSkill() {
    // say
    // -------------------------------------------------------------------------------- //
 
-   function say(text, siteId, lang, cb) {
-      let payload = { text, siteId, lang };
+   function say(text, lang, siteId, cb) {
+      let payload = { text, siteId, lang: lang || 'en_GB' };
 
       rpcClient.execute("say", payload, cb);
    }
@@ -177,7 +184,7 @@ function BaseSkill() {
    // -------------------------------------------------------------------------------- //
 
    function ask(text, lang, siteId, intentFilter, cb) {
-      let payload = { text, lang, siteId, intentFilter }
+      let payload = { text, siteId, lang: lang || 'en_GB', intentFilter }
 
       rpcClient.execute("ask", payload, cb);
    }
@@ -188,6 +195,37 @@ function BaseSkill() {
 
    function getLogger() {
       return log;
+   }
+
+   // -------------------------------------------------------------------------------- //
+   // getConfig
+   // -------------------------------------------------------------------------------- //
+
+   function getConfig() {
+      return config;
+   }
+
+   // -------------------------------------------------------------------------------- //
+   // init
+   // -------------------------------------------------------------------------------- //
+
+   function init() {
+      log = Logger.getLogger(args["skill-name"], args["debug"] ? true : false)
+      rpcClient = RpcClient(args['parent-port'], api);
+      rpcServer = RpcServer(args['port'], api);
+
+      let exists = false;
+      let configFilePath = path.join(rootDirectory, 'config.ini');
+
+      try { exists = fs.existsSync(configFilePath) } catch (e) {}
+
+      if (configFilePath && exists) {
+         try {
+            config = ini.parse(fs.readFileSync(configFilePath, 'utf-8'))
+         } catch (e) {
+            log.error('Failed to parse file "' + configFilePath + '" (' + e + ')');
+         }
+      }
    }
 
    return api;

@@ -31,7 +31,7 @@ Your skill implementation must provide the following components:
 Your `index.js` might be sufficient if it looks like this:
 
 ```
-let base = require("node-hss-skill")()
+let base = require("node-hss-skill")(__dirname)    // important, must provide '__dirname'
 let skill = require("./skill.js")(base)
 
 base.run(skill);

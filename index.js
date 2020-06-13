@@ -29,13 +29,15 @@ function BaseSkill(rootDirectory) {
    if (!rootDirectory)
       throw new Error('No root-directory given!')
 
-   let api = { run, handleRequest, say, ask, getLogger, getConfig };
+   let api = { run, handleRequest, say, ask, getLogger, getConfig, getDefaultLanguage, setDefaultLanguage };
 
    let skill;
    let config;
    let log;
    let rpcClient;
    let rpcServer;
+   let defaultLanguage = "en_GB";
+   let skillJson;
 
    init();
 
@@ -150,7 +152,7 @@ function BaseSkill(rootDirectory) {
             "sessionId": params.sessionId,
             "siteId": params.siteId,
             "text": err ? null : response,
-            "lang": lang || "en_GB"
+            "lang": lang || defaultLanguage
         }
 
         cb(err, payload);
@@ -161,7 +163,7 @@ function BaseSkill(rootDirectory) {
             "sessionId": params.sessionId,
             "siteId": params.siteId,
             "question": err ? null : response,
-            "lang": lang || "en_GB",
+            "lang": lang || defaultLanguage,
             "intentFilter": intentFilter
         }
 
@@ -174,7 +176,7 @@ function BaseSkill(rootDirectory) {
    // -------------------------------------------------------------------------------- //
 
    function say(text, lang, siteId, cb) {
-      let payload = { text, siteId, lang: lang || 'en_GB' };
+      let payload = { text, siteId, lang: lang || defaultLanguage };
 
       rpcClient.execute("say", payload, cb);
    }
@@ -184,7 +186,7 @@ function BaseSkill(rootDirectory) {
    // -------------------------------------------------------------------------------- //
 
    function ask(text, lang, siteId, intentFilter, cb) {
-      let payload = { text, siteId, lang: lang || 'en_GB', intentFilter }
+      let payload = { text, siteId, lang: lang || defaultLanguage, intentFilter }
 
       rpcClient.execute("ask", payload, cb);
    }
@@ -206,6 +208,22 @@ function BaseSkill(rootDirectory) {
    }
 
    // -------------------------------------------------------------------------------- //
+   // setDefaultLanguage
+   // -------------------------------------------------------------------------------- //
+
+   function setDefaultLanguage(to) {
+      defaultLanguage = to
+   }
+
+   // -------------------------------------------------------------------------------- //
+   // getDefaultLanguage
+   // -------------------------------------------------------------------------------- //
+
+   function getDefaultLanguage() {
+      return defaultLanguage;
+   }
+
+   // -------------------------------------------------------------------------------- //
    // init
    // -------------------------------------------------------------------------------- //
 
@@ -216,6 +234,7 @@ function BaseSkill(rootDirectory) {
 
       let exists = false;
       let configFilePath = path.join(rootDirectory, 'config.ini');
+      let skillJsonPath = path.join(rootDirectory, 'skill.json');
 
       try { exists = fs.existsSync(configFilePath) } catch (e) {}
 
@@ -226,6 +245,14 @@ function BaseSkill(rootDirectory) {
             log.error('Failed to parse file "' + configFilePath + '" (' + e + ')');
          }
       }
+
+      try {
+         skillJson = JSON.parse(fs.readFileSync(skillJsonPath, 'utf8'));
+
+         if (skillJson.language)
+            defaultLanguage = skillJson.language;
+
+      } catch (e) {}
    }
 
    return api;

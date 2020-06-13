@@ -1,6 +1,6 @@
 {
   "name": "node-hss-skill",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Node.JS bindings for skill implementation for the hermes skill server",
   "main": "index.js",
   "scripts": {

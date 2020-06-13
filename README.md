@@ -26,6 +26,15 @@ Your skill implementation must provide the following components:
 - your skill implementation
 - [optional] `config.ini.default` file containing your skill's configuration (default) parameters
 
+In addition, for interaction with `rhasspy` voice assistant:
+
+- [optional] `sentences.ini` containing the sentences `rhasspy` should use (only YOUR SKILLs sentences)
+- [optional] `slots.json` containing slot definitions your skill uses
+
+If `sentences.ini` is provided, `hss-cli` will register the sentences at `rhasspy` upon skill installation, and trigger `rhasspy` for training.
+
+Same applies to `slots.json`.
+
 ## Boilerplate
 
 Your `index.js` might be sufficient if it looks like this:
@@ -59,7 +68,7 @@ The callback function `answer` should be called when your skill is done handling
 
 The first argument represents any error your skill encountered while processing the intent.     
 The second parameter should be the response your skill determined (as **string**).     
-The third (optional) parameter determines the associated language-code for the response, which will default to `en_GB` when ommitted.
+The third (optional) parameter determines the associated language-code for the response. If ommited, the language found in `skill.json` will be used, if the file exists, otherwise it will default to `en_GB`.  
 
 ##### Callback function: `followup(err, question, lang, intentFilter)`
 
@@ -68,87 +77,12 @@ The callback function `followup` should be called when your skill needs addition
 
 The first argument represents any error your skill encountered while processing the intent.    
 The second parameter should be the question which will be asked by the voice assistant (as **string**).     
-The third (optional) parameter determines the associated language-code for the response, which will default to `en_GB` when ommitted.    
+The third (optional) parameter determines the associated language-code for the response. If ommited, the language found in `skill.json` will be used, if the file exists, otherwise it will default to `en_GB`.        
 The last (optional) parameter can contain an array of strings representing a filter for intents which shall be applied when asking the user.
 
-## Contents of `skill.json`
+### Example
 
-The `skill.json` is a mandatory file containing meta info about your skill. It is used both during installation as well as when your skill is run.
-
-It could look like the following:
-
-```
-{
-    "platform": "hss-node",
-    "type": "weather",
-    "name": "hss-s710-nodedemo",
-    "version": "1.0.0",
-    "author": "Some Dude",
-    "intents": ["s710:howAreYou"]
-}
-```
-
-Properties explained:
-
-##### `platform` (mandatory)
-
-Must be `hss-node`, stating the skill is a Node.JS based HSS skill.
-
-#### `type` (mandatory)
-
-Type of skill, e.g. `weather`. Must be one of:
-
-- `weather`
-- `calendar`
-- `music`
-- `datetime`
-- `news`
-- `games`
-- `fun`
-- `utility`
-- `automation`
-
-#### `version` (mandatory) 
-
-The version number of the skill.
-
-#### `author` (mandatory)
-
-The name of the author of the skill.
-
-#### `intents` (mandatory) 
-
-An array of strings containing all intents the skill can handle.
-
-## Base class functions
-
-The `node-hss-skill` module also provides some convenience functions for your skill implementation to use.
-
-##### Function: `say(text, lang, siteId, cb)`
-
-Lets the voice assistant speak the given `text`, with optional language code (defaulting to `en_GB` and `siteId` (defaulting to `undefined`). 
-
-If `cb` is given, it is executed after the text has been sent to the voice assistant.
-
-##### Function: `ask(question, lang, siteId, intentFilter, cb)`
-
-Lets the voice assistant speak the given `question`, with optional language code (defaulting to `en_GB` and `siteId` (defaulting to `undefined`). 
-
-If `intentFilter` is given, it is expected to be an array of strings containing intents the voice assistant shall be restricted to when recognizing the user reply.
-
-If `cb` is given, it is executed after the question has been sent to the voice assistant.
-
-##### Function: `getLogger()`
-
-Returns the `log` object the skill implementation can use for logging.
-
-##### Function: `getConfig()`
-
-Returns an object containing the parameters of the skill's `config.ini`, or `undefined` if the config file is not present or could not be read.
-
-# Example
-
-A minimal example of a skill (`index.js`) might look as:
+A minimal example of a skill might look like:
 
 ```
 function Skill(baseSkill) {
@@ -156,6 +90,8 @@ function Skill(baseSkill) {
    let log = baseSkill.getLogger();
    let cfg = baseSkill.getConfig();
    let api = { handle };
+   
+   baseSkill.setDefaultLanguage("de_DE");
 
    function handle(params, answer, followup) {
       log.info("I can use logging here, yay.");
@@ -179,6 +115,108 @@ module.exports = Skill;
 ```
 
 The design of the skill implementation (class, function, object, ...) is up to the developer, as long as the object provided to `base.run(skill);` provides the above mentioned mandatory functions.
+
+## Contents of `skill.json`
+
+The `skill.json` is a mandatory file containing meta info about your skill. It is used both during installation as well as when your skill is run.
+
+It could look like the following:
+
+```
+{
+    "platform": "hss-python",
+    "type": "weather",
+    "name": "hss-s710-mood",
+    "version": "1.0.0",
+    "author": "Some Dude",
+    "intents": ["s710:howAreYou"],
+    "shortDescription": "Some funny chatting",
+    "version": "1.0.0",
+    "language": "en_GB"
+}
+```
+
+Properties explained:
+
+##### `platform` (mandatory)
+
+Must be `hss-python`, stating the skill is a python based HSS skill.
+
+#### `type` (mandatory)
+
+Type of skill, e.g. `weather`. Must be one of:
+
+- `weather`
+- `calendar`
+- `music`
+- `datetime`
+- `news`
+- `games`
+- `fun`
+- `utility`
+- `automation`
+
+#### `version` (mandatory)
+
+The version number of the skill.
+
+#### `author` (mandatory)
+
+The name of the author of the skill.
+
+#### `intents` (mandatory)
+
+An array of strings containing all intents the skill can handle.
+
+#### `shortDescription` (mandatory)
+
+A short description of your skill. Will be shown in the HSS registry skill list.
+
+#### `version` (optional)
+
+A string describing your skill's version.
+
+#### `language` (mandatory)
+
+A four-letter code string determining your skill's default language.
+
+## Base class functions
+
+The `node-hss-skill` module also provides some convenience functions for your skill implementation to use.
+
+##### Function: `say(text, lang, siteId, cb)`
+
+Lets the voice assistant speak the given `text`, with optional language code and `siteId` (defaulting to `undefined`). 
+
+If `lang` is ommited, the language found in `skill.json` will be used, if the file exists, otherwise it will default to `en_GB`.    
+
+If `cb` is given, it is executed after the text has been sent to the voice assistant.
+
+##### Function: `ask(question, lang, siteId, intentFilter, cb)`
+
+Lets the voice assistant speak the given `question`, with optional language code and `siteId` (defaulting to `undefined`). 
+
+If `lang` is ommited, the language found in `skill.json` will be used, if the file exists, otherwise it will default to `en_GB`.    
+
+If `intentFilter` is given, it is expected to be an array of strings containing intents the voice assistant shall be restricted to when recognizing the user reply.
+
+If `cb` is given, it is executed after the question has been sent to the voice assistant.
+
+##### Function: `getLogger()`
+
+Returns the `log` object the skill implementation can use for logging.
+
+##### Function: `getConfig()`
+
+Returns an object containing the parameters of the skill's `config.ini`, or `undefined` if the config file is not present or could not be read.
+
+##### Function: `setDefaultLanguage(lang)`
+
+Sets the default language to `lang`. Must be a four-letter code string (e.g. `de_DE`).
+
+##### Function: `getDefaultLanguage(lang)`
+
+Returns the current default language (e.g. `de_DE`).
 
 # Configuration
 

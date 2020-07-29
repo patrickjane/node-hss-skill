@@ -35,6 +35,12 @@ If `sentences.ini` is provided, `hss-cli` will register the sentences at `rhassp
 
 Same applies to `slots.json`.
 
+In order to support multiple languages, a skill may have the following files instead of `slots.json` and `sentences.ini`:
+
+- `slotsdict.[LANG].json` (multiple, one per language with `LANG` beeing the language code in lower case, e.g. "de_de")
+- `sentences.[LANG].ini` (multiple, one per language with `LANG` beeing the language code in lower case, e.g. "de_de")
+
+
 ## Boilerplate
 
 Your `index.js` might be sufficient if it looks like this:
@@ -57,10 +63,12 @@ The `params` parameter is an object containing all necessary information to hand
 
 The parameters `answer` and `followup` are both callback functions, one of which must be called whenever your skill has finished intent handling. It will receive the answer determined by your skill and send it back to the server.
 
-##### Parameter: `params` -> `{ sessionId, siteId, intentName, slots, _request }`
+##### Parameter: `params` -> `{ sessionId, siteId, intentName, slots, mappedSlots, _request }`
 
 In addition to the siteId and sessionId, the name of the intent and the recognized slots (as an array of objects) are contained.
 Additionally, the full (unparsed) original request is preserved in the `_request` property.
+
+To support multiple languages with one skill implementation,`mappedSlots` is provided, which contains each slot translated to a slot-identifier (instead of the raw slot string). See chapter "Multiple languages support".
 
 ##### Callback function: `answer(err, response, lang)`
 
@@ -178,7 +186,7 @@ A string describing your skill's version.
 
 #### `language` (mandatory)
 
-A four-letter code string determining your skill's default language.
+A four-letter code string determining your skill's default language. If the skill supports more than one language, this property shall be an array (e.g. ["de_DE", "en_GB"]).
 
 ## Base class functions
 
@@ -217,6 +225,65 @@ Sets the default language to `lang`. Must be a four-letter code string (e.g. `de
 ##### Function: `getDefaultLanguage(lang)`
 
 Returns the current default language (e.g. `de_DE`).
+
+### Multiple languages support
+
+In order to support more than one language, a skill might need the following:
+
+- sentences in all supported languages
+- slots in all supported languages
+- determination of current/active language
+- easy handling of language specific slots in the code
+
+`node-hss-skill` supports all of this, thus enabling developers to easily implement more than one language in their skills.
+
+#### sentences.ini
+
+In order to support more than one language, instead of providing a file named `sentences.ini`, provide one file per language, and include the language code (lowercase) in the filename:
+
+- `sentences.de_de.ini`
+- `sentences.en_gb.ini`
+
+#### slots
+
+In order to support more than one language, instead of providing a file named `slots.json`, provide one file per language, and include the language code (lowercase) in the filename. Also, the file does not contain arrays, but dictionary instead:
+
+- `slotsdict.de_de.json`
+- `slotsdict.en_gb.json`
+
+The idea is, that it will be cumbersome to work with the localized, language-specific slot strings in the code, when multiple languages are involved. Therefore, the `slotsdict.json` files provide a mapping from localized ("real") slots strings to slot-identifiers, which will be the same for every language. Those slot-identifiers will be provided to the `handle()` method in the `mappedSlots` parameters.
+
+The files might contain:
+
+```
+slotsdict.de_de.json:
+
+{
+   "relative_time": {
+      "now": ["jetzt", "gerade", "später", "nachher", "gegen später"],
+      "today": ["heute"],
+      "todayMorning": ["heute früh", "heute morgen"]
+   }
+}
+
+slotsdict.en_gb.json:
+
+{
+   "relative_time": {
+      "now": ["now", "right now", "later", "then", "towards later", "around later"],
+      "today": ["today"],
+      "todayMorning": ["this morning", "ealier today"]
+   }
+}
+```
+
+So, if, for example, a slot with the text "nachher" is recognized (with german language enable), `handle()` will receive `nachher` in the `slots` parameter, and `now` in the `mappedSlots` parameter.
+
+If a slot with the text "right now" is recognized (with english language enable), `handle()` will receive `right now` in the `slots` parameter, and `now` in the `mapped_slots` parameter.
+
+This means, that the skill implementation can rely on a language-independent slot-identifer (`now` in the above example) while still having access to the original, language-specific slot value (`nachher`/`right now`).
+
+When installing a skill with the above slot-dictionaries, `hss-cli` will still register slots as usual at the voice assistant. It will, however, only register the slots for the language which is selected upon installation.
 
 # Configuration
 

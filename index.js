@@ -22,22 +22,29 @@ const ini = require("ini");
 function BaseSkill(rootDirectory) {
    const args = require('minimist')(process.argv.slice(2));
 
-   for (let required of ['skill-name', 'parent-port', 'port'])
-      if (!args[required])
-         throw new Error('Missing mandatory argument "' + required + '"');
+   let debug = args && args['debug'];
+   let develop = args && args['develop'];
+
+   if (!develop) {
+      for (let required of ['skill-name', 'parent-port', 'port'])
+         if (!args[required])
+            throw new Error('Missing mandatory argument "' + required + '"');
+   }
 
    if (!rootDirectory)
       throw new Error('No root-directory given!')
 
-   let api = { run, handleRequest, say, ask, getLogger, getConfig, getDefaultLanguage, setDefaultLanguage };
+   let api = { run, handleRequest, say, ask, getLogger, getConfig,
+               getDefaultLanguage, setDefaultLanguage, getDebug, getDevelop, getSlotDictionary };
 
    let skill;
    let config;
    let log;
    let rpcClient;
    let rpcServer;
-   let defaultLanguage = "en_GB";
+   let defaultLanguage;
    let skillJson;
+   let slotDictionary;
 
    init();
 
@@ -123,6 +130,7 @@ function BaseSkill(rootDirectory) {
       params.sessionId = request.sessionId || null;
       params.siteId = request.siteId || null;
       params.slots = {};
+      params.mappedSlots = {}
       params._request = request;
 
       try {
@@ -135,6 +143,13 @@ function BaseSkill(rootDirectory) {
                params.slots[s.slotName].push(s.value.value);
             } else {
                params.slots[s.slotName] = s.value.value;
+            }
+
+            if (params.mappedSlots[s.slotName]) {
+               params.mappedSlots[s.slotName] = Array.isArray(slots[s.slotName]) ? slots[s.slotName] : [ slots[s.slotName] ];
+               params.mappedSlots[s.slotName].push(_slotIdentOf(s.entity, s.value.value));
+            } else {
+               params.mappedSlots[s.slotName] = _slotIdentOf(s.entity, s.value.value);
             }
          }
       } catch (e) {
@@ -168,6 +183,13 @@ function BaseSkill(rootDirectory) {
         }
 
         cb(err, payload);
+      }
+
+      function _slotIdentOf(entity, value) {
+         if (!slotDictionary || !slotDictionary[entity])
+            return value;
+
+         return slotDictionary[entity][value] || value;
       }
    }
 
@@ -224,10 +246,35 @@ function BaseSkill(rootDirectory) {
    }
 
    // -------------------------------------------------------------------------------- //
+   // getDebug
+   // -------------------------------------------------------------------------------- //
+
+   function getDebug() {
+      return debug;
+   }
+
+   // -------------------------------------------------------------------------------- //
+   // getDevelop
+   // -------------------------------------------------------------------------------- //
+
+   function getDevelop() {
+      return develop;
+   }
+
+   // -------------------------------------------------------------------------------- //
+   // getSlotDictionary
+   // -------------------------------------------------------------------------------- //
+
+   function getSlotDictionary() {
+      return slotDictionary;
+   }
+
+   // -------------------------------------------------------------------------------- //
    // init
    // -------------------------------------------------------------------------------- //
 
    function init() {
+
       log = Logger.getLogger(args["skill-name"], args["debug"] ? true : false)
       rpcClient = RpcClient(args['parent-port'], api);
       rpcServer = RpcServer(args['port'], api);
@@ -240,18 +287,52 @@ function BaseSkill(rootDirectory) {
 
       if (configFilePath && exists) {
          try {
-            config = ini.parse(fs.readFileSync(configFilePath, 'utf-8'))
+            config = ini.parse(fs.readFileSync(configFilePath, 'utf-8'));
          } catch (e) {
             log.error('Failed to parse file "' + configFilePath + '" (' + e + ')');
          }
       }
 
+      if (config && config.skill && config.skill.language)
+         defaultLanguage = config.skill.language;
+
       try {
          skillJson = JSON.parse(fs.readFileSync(skillJsonPath, 'utf8'));
 
-         if (skillJson.language)
+         if (!defaultLanguage && skillJson.language) {
             defaultLanguage = skillJson.language;
 
+            if (Array.isArray(defaultLanguage))
+               defaultLanguage = defaultLanguage[0];
+         }
+      } catch (e) {}
+
+      if (!defaultLanguage)
+         defaultLanguage = "en_GB";
+
+      let slotDictPath = path.join(rootDirectory, 'slotsdict.' + defaultLanguage.toLowerCase() + '.json');
+
+      try {
+         if (fs.existsSync(slotDictPath)) {
+            slotDictionary = {};
+
+            try {
+               slotsdict = JSON.parse(fs.readFileSync(slotDictPath, 'utf-8'));
+
+               for (let key in slotsdict) {
+                  if (!slotDictionary[key])
+                     slotDictionary[key] = {};
+
+                  for (let slotIdent in slotsdict[key]) {
+                     for (let slotVal of slotsdict[key][slotIdent])
+                        slotDictionary[key][slotVal] = slotIdent;
+                  }
+               }
+
+            } catch (e) {
+               log.error('Failed to parse file "' + slotDictPath + '" (' + e + ')');
+            }
+         }
       } catch (e) {}
    }
 
